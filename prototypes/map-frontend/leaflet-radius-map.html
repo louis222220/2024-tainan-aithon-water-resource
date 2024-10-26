@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文教設施地圖</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #map {
+            height: 80vh;
+            width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .controls {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .coordinates {
+            margin-top: 10px;
+            font-family: monospace;
+            color: #333;
+        }
+        input[type="number"] {
+            padding: 5px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        button {
+            padding: 5px 15px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .facility-list {
+            margin-top: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .facility-item {
+            padding: 8px;
+            margin-bottom: 8px;
+            background: #fff;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .facility-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        .facility-info {
+            color: #666;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <label for="radius">輸入半徑 (公尺)：</label>
+        <input type="number" id="radius" value="1000" min="100" step="100">
+        <button onclick="clearMap()">清除標記</button>
+        <div class="coordinates" id="coordinates"></div>
+        <div class="facility-list" id="facilityInfo"></div>
+    </div>
+    <div id="map"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script>
+        // 初始化地圖，設定在台南新營
+        const map = L.map('map').setView([23.3108, 120.3232], 13);
+        
+        // 添加 OpenStreetMap 圖層
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        let marker = null;
+        let circle = null;
+        let facilityMarkers = [];
+
+        // 建立自訂的設施圖標
+        const facilityIcon = L.icon({
+            iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+            shadowSize: [41, 41],
+            shadowAnchor: [12, 41]
+        });
+
+        // 取得文教設施資料
+        async function getFacilities(lat, lng, radius) {
+            try {
+                const response = await fetch(`https://api.nlsc.gov.tw/other/MarkBufferAnlys/edu/${lng}/${lat}/${radius}`);
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Error fetching facilities:', error);
+                return [];
+            }
+        }
+
+        // 清除所有設施標記
+        function clearFacilityMarkers() {
+            facilityMarkers.forEach(marker => map.removeLayer(marker));
+            facilityMarkers = [];
+            document.getElementById('facilityInfo').innerHTML = '';
+        }
+
+        // 顯示設施資訊
+        function displayFacilitiesInfo(facilities) {
+            const infoDiv = document.getElementById('facilityInfo');
+            if (facilities.length === 0) {
+                infoDiv.innerHTML = '<div class="facility-item">此範圍內無文教設施</div>';
+                return;
+            }
+
+            infoDiv.innerHTML = facilities
+                .sort((a, b) => a.distance - b.distance)
+                .map(facility => `
+                    <div class="facility-item">
+                        <div class="facility-name">${facility.name}</div>
+                        <div class="facility-info">
+                            ${facility.addr ? `${facility.addr}<br>` : ''}
+                            ${facility.tel ? `${facility.tel}<br>` : ''}
+                            距離：${facility.distance}公尺
+                        </div>
+                    </div>
+                `).join('');
+        }
+
+        // 點擊地圖時的處理函數
+        map.on('click', async function(e) {
+            const radius = parseInt(document.getElementById('radius').value);
+            const lat = e.latlng.lat;
+            const lng = e.latlng.lng;
+
+            // 清除舊的標記
+            if (marker) map.removeLayer(marker);
+            if (circle) map.removeLayer(circle);
+            clearFacilityMarkers();
+
+            // 添加新的標記
+            marker = L.marker([lat, lng]).addTo(map);
+            
+            // 添加圓形
+            circle = L.circle([lat, lng], {
+                color: 'red',
+                fillColor: '#f03',
+                fillOpacity: 0.2,
+                radius: radius
+            }).addTo(map);
+
+            // 更新座標顯示
+            document.getElementById('coordinates').innerHTML = 
+                `選擇的位置：緯度 ${lat.toFixed(6)}，經度 ${lng.toFixed(6)}`;
+
+            // 獲取並顯示設施資訊
+            const facilities = await getFacilities(lat, lng, radius);
+            displayFacilitiesInfo(facilities);
+
+            // 在地圖上標記設施
+            facilities.forEach(facility => {
+                const facilityMarker = L.marker([facility.lat, facility.lon], {
+                    icon: facilityIcon
+                }).bindPopup(`
+                    <div class="facility-name">${facility.name}</div>
+                    <div class="facility-info">
+                        ${facility.addr ? `${facility.addr}<br>` : ''}
+                        ${facility.tel ? `${facility.tel}<br>` : ''}
+                        距離：${facility.distance}公尺
+                    </div>
+                `).addTo(map);
+                facilityMarkers.push(facilityMarker);
+            });
+        });
+
+        // 清除地圖上的所有標記
+        function clearMap() {
+            if (marker) map.removeLayer(marker);
+            if (circle) map.removeLayer(circle);
+            clearFacilityMarkers();
+            document.getElementById('coordinates').innerHTML = '';
+        }
+    </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文教設施地圖</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #map {
+            height: 80vh;
+            width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .controls {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .coordinates {
+            margin-top: 10px;
+            font-family: monospace;
+            color: #333;
+        }
+        input[type="number"] {
+            padding: 5px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        button {
+            padding: 5px 15px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .facility-list {
+            margin-top: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .facility-item {
+            padding: 8px;
+            margin-bottom: 8px;
+            background: #fff;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .facility-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        .facility-info {
+            color: #666;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <label for="radius">輸入半徑 (公尺)：</label>
+        <input type="number" id="radius" value="1000" min="100" step="100">
+        <button onclick="clearMap()">清除標記</button>
+        <div class="coordinates" id="coordinates"></div>
+        <div class="facility-list" id="facilityInfo"></div>
+    </div>
+    <div id="map"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script>
+        // 初始化地圖，設定在台南新營
+        const map = L.map('map').setView([23.3108, 120.3232], 13);
+        
+        // 添加 OpenStreetMap 圖層
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        let marker = null;
+        let circle = null;
+        let facilityMarkers = [];
+
+        // 建立自訂的設施圖標
+        const facilityIcon = L.icon({
+            iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+            shadowSize: [41, 41],
+            shadowAnchor: [12, 41]
+        });
+
+        // 取得文教設施資料
+        async function getFacilities(lat, lng, radius) {
+            try {
+                const response = await fetch(`https://api.nlsc.gov.tw/other/MarkBufferAnlys/edu/${lng}/${lat}/${radius}`);
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Error fetching facilities:', error);
+                return [];
+            }
+        }
+
+        // 清除所有設施標記
+        function clearFacilityMarkers() {
+            facilityMarkers.forEach(marker => map.removeLayer(marker));
+            facilityMarkers = [];
+            document.getElementById('facilityInfo').innerHTML = '';
+        }
+
+        // 顯示設施資訊
+        function displayFacilitiesInfo(facilities) {
+            const infoDiv = document.getElementById('facilityInfo');
+            if (facilities.length === 0) {
+                infoDiv.innerHTML = '<div class="facility-item">此範圍內無文教設施</div>';
+                return;
+            }
+
+            infoDiv.innerHTML = facilities
+                .sort((a, b) => a.distance - b.distance)
+                .map(facility => `
+                    <div class="facility-item">
+                        <div class="facility-name">${facility.name}</div>
+                        <div class="facility-info">
+                            ${facility.addr ? `${facility.addr}<br>` : ''}
+                            ${facility.tel ? `${facility.tel}<br>` : ''}
+                            距離：${facility.distance}公尺
+                        </div>
+                    </div>
+                `).join('');
+        }
+
+        // 點擊地圖時的處理函數
+        map.on('click', async function(e) {
+            const radius = parseInt(document.getElementById('radius').value);
+            const lat = e.latlng.lat;
+            const lng = e.latlng.lng;
+
+            // 清除舊的標記
+            if (marker) map.removeLayer(marker);
+            if (circle) map.removeLayer(circle);
+            clearFacilityMarkers();
+
+            // 添加新的標記
+            marker = L.marker([lat, lng]).addTo(map);
+            
+            // 添加圓形
+            circle = L.circle([lat, lng], {
+                color: 'red',
+                fillColor: '#f03',
+                fillOpacity: 0.2,
+                radius: radius
+            }).addTo(map);
+
+            // 更新座標顯示
+            document.getElementById('coordinates').innerHTML = 
+                `選擇的位置：緯度 ${lat.toFixed(6)}，經度 ${lng.toFixed(6)}`;
+
+            // 獲取並顯示設施資訊
+            const facilities = await getFacilities(lat, lng, radius);
+            displayFacilitiesInfo(facilities);
+
+            // 在地圖上標記設施
+            facilities.forEach(facility => {
+                const facilityMarker = L.marker([facility.lat, facility.lon], {
+                    icon: facilityIcon
+                }).bindPopup(`
+                    <div class="facility-name">${facility.name}</div>
+                    <div class="facility-info">
+                        ${facility.addr ? `${facility.addr}<br>` : ''}
+                        ${facility.tel ? `${facility.tel}<br>` : ''}
+                        距離：${facility.distance}公尺
+                    </div>
+                `).addTo(map);
+                facilityMarkers.push(facilityMarker);
+            });
+        });
+
+        // 清除地圖上的所有標記
+        function clearMap() {
+            if (marker) map.removeLayer(marker);
+            if (circle) map.removeLayer(circle);
+            clearFacilityMarkers();
+            document.getElementById('coordinates').innerHTML = '';
+        }
+    </script>
+</body>
+</html>
