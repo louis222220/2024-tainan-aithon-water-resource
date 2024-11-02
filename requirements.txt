@@ -1,0 +1,6 @@
+pandas
+pyproj
+psycopg2
+sqlalchemy
+geoalchemy2
+geopandas
