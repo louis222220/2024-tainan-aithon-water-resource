@@ -23,10 +23,10 @@ def CreateSQLEngine():
 
 
 # 整理臺南市門牌座標資料函數
-def ImportHouseNumData(engine):
+def ImportHouseholdsData(engine):
 
     # 讀取門牌座標資料
-    houseNumData = pd.read_csv('112年臺南市門牌坐標資料.csv')
+    householdsData = pd.read_csv('112年臺南市門牌坐標資料.csv')
 
     # 建立經緯度轉換器
     transformer = Transformer.from_crs("EPSG:3826", "EPSG:4326", always_xy=True)
@@ -36,27 +36,27 @@ def ImportHouseNumData(engine):
         return Point(transformer.transform(row['橫座標'], row['縱座標']))
 
     # 將門牌座標由TWD97轉為WGS84格式
-    houseNumData['geometry'] = houseNumData.apply(convert_to_wgs84, axis=1)
+    householdsData['geometry'] = householdsData.apply(convert_to_wgs84, axis=1)
 
     # 移除不需要的欄位
-    houseNumData = houseNumData.drop(columns=['橫座標', '縱座標'])
+    householdsData = householdsData.drop(columns=['橫座標', '縱座標'])
 
     # 重新命名欄位
-    houseNumData.columns = [
+    householdsData.columns = [
         'city_code', 'dist_code', 'village', 'neighborhood',
         'road_street', 'area', 'lane', 'alley', 'number',
         'geometry'
     ]
 
     # 轉為geopandas格式
-    houseNumData = gpd.GeoDataFrame(houseNumData, geometry='geometry')
+    householdsData = gpd.GeoDataFrame(householdsData, geometry='geometry')
     # 設定座標系統
-    houseNumData.crs = 'EPSG:4326'
+    householdsData.crs = 'EPSG:4326'
 
     # 匯入資料至資料庫
-    houseNumData.to_postgis('house_num', con=engine, if_exists='replace')
+    householdsData.to_postgis('households', con=engine, if_exists='replace')
 
-    return houseNumData
+    return householdsData
 
 
 # 匯入臺南市人口統計資料函數
@@ -86,13 +86,13 @@ if __name__ == '__main__':
     engine = CreateSQLEngine()
 
     # 整理臺南市門牌座標資料
-    ImportHouseNumData(engine)
+    ImportHouseholdsData(engine)
 
     # 整理臺南市人口統計資料
     ImportPopulationData(engine)
 
     # 自PostGIS資料庫讀取臺南市門牌座標資料
-    houseNumData = GetPostGISData(engine, 'house_num')
+    householdsData = GetPostGISData(engine, 'households')
 
     # 自PostGIS資料庫讀取臺南市人口統計資料
     populationData = GetPostGISData(engine, 'population')
