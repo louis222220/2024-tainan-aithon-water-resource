@@ -4,3 +4,6 @@ psycopg2
 sqlalchemy
 geoalchemy2
 geopandas
+fastapi[standard]
+uvicorn
+asyncpg

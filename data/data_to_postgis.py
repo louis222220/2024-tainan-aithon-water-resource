@@ -4,13 +4,14 @@ from pyproj import Transformer
 from sqlalchemy import create_engine
 import geopandas as gpd
 from shapely.geometry import Point
+import os
 
 
 # 建立資料庫引擎函數
 def CreateSQLEngine():
 
     # 設定資料庫連接資訊
-    host = "127.0.0.1"
+    host = os.getenv("DB_HOST", "127.0.0.1")
     database = "postgres"
     user = "postgres"
     password = "admin"
