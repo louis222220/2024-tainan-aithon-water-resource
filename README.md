@@ -5,8 +5,9 @@
     * db: PostGIS資料庫
     * db_init: 以Python程式匯入初始資料(人口與門牌至資料庫)，啟動後須等待一段時間匯入
     * fastapi: Python FastAPI
-* 在本專案主目錄下，以Docker-compose部署指令:
+* 在本專案的backen資料夾目錄下，以Docker-compose部署指令:
 ```
+cd backend
 docker-compose up -d
 ```
 
