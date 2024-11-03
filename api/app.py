@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
 from pydantic import BaseModel
+from typing import List
 import os
 
 # 設定 FastAPI 應用程式
@@ -18,6 +19,73 @@ password = "admin"
 port = "5432"
 engine = create_async_engine(f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{database}", echo=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, class_=AsyncSession)
+
+# 欄位型別模型
+class ColumnType(BaseModel):
+    name: str  # 欄位名稱
+    type: str  # 資料型別
+
+# 欄位內容模型
+class ColumnValue(BaseModel):
+    name: str  # 欄位名稱
+    value: str  # 資料內容
+
+# 請求建立資料表模型
+class CreateTableRequest(BaseModel):
+    table_name: str  # 資料表名稱
+    columns: List[ColumnType]  # 欄位型別
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "table_name": "example_table",
+                    "columns": [
+                        {"name": "id", "type": "SERIAL"},
+                        {"name": "name", "type": "TEXT"},
+                        {"name": "households", "type": "INTEGER"},
+                        {"name": "population", "type": "INTEGER"},
+                        {"name": "geometry", "type": "geometry(Polygon, 4326)"},
+                    ]
+                }
+            ]
+        }
+    }
+
+# 請求刪除資料表模型
+class DeleteTableRequest(BaseModel):
+    table_name: str  # 資料表名稱
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "table_name": "example_table",
+                }
+            ]
+        }
+    }
+
+# 請求新增資料模型
+class InsertDataRequest(BaseModel):
+    table_name: str  # 資料表名稱
+    columns: List[ColumnValue]  # 欄位內容
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "table_name": "example_table",
+                    "columns": [
+                        {"name": "name", "value": "測試項目1"},
+                        {"name": "households", "value": "50"},
+                        {"name": "population", "value": "100"},
+                        {"name": "geometry", "value": "POLYGON((120.1828 22.9961, 120.1811 22.9869, 120.1906 22.9926, 120.1828 22.9961))"},
+                    ]
+                }
+            ]
+        }
+    }
 
 # 請求單點模型
 class PointRequest(BaseModel):
@@ -63,12 +131,71 @@ class HouseholdsResponse(BaseModel):
 class PopulationResponse(BaseModel):
     population: int  # 人口數量
 
+
 # 首頁
 @app.get("/", response_class=HTMLResponse)
 async def index():
     return '''
     <p>API測試請至此連結: <a href="http://127.0.0.1:8000/docs#/">http://127.0.0.1:8000/docs#/</a><p>
     '''
+
+
+# 建立資料表
+@app.post("/tables/create", response_model=str)
+async def create_table(request: CreateTableRequest):
+    async with SessionLocal() as session:
+        try:
+            # 構建 SQL 查詢以建立資料表
+            columns = ", ".join([f"{col.name} {col.type}" for col in request.columns])
+            query = f"CREATE TABLE IF NOT EXISTS {request.table_name} ({columns});"
+            await session.execute(text(query))
+            await session.commit()
+            return f"Table '{request.table_name}' created successfully."
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+# 刪除資料表
+@app.delete("/tables/delete/", response_model=str)
+async def delete_table(request: DeleteTableRequest):
+    async with SessionLocal() as session:
+        try:
+            # 構建 SQL 查詢以刪除資料表
+            query = f"DROP TABLE IF EXISTS {request.table_name};"
+            await session.execute(text(query))
+            await session.commit()
+            return f"Table '{request.table_name}' deleted successfully."
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+        
+
+# 新增資料
+@app.post("/tables/{table_name}/insert", response_model=str)
+async def insert_data(request: InsertDataRequest):
+    async with SessionLocal() as session:
+        try:
+            # 構建 SQL 查詢以插入資料
+            columns = ", ".join([f"{col.name}" for col in request.columns])
+            values = ''
+            for col in request.columns:
+                if col.name == 'geometry':
+                    values = values + f"ST_GeomFromText('{col.value}', 4326), "
+                else:
+                    values = values + f"'{col.value}', "
+            values = values[0:-2]  # 移除最後逗號
+            query = f"INSERT INTO {request.table_name} ({columns}) VALUES ({values});"
+            await session.execute(text(query))
+            await session.commit()
+            return f"Data inserted into '{request.table_name}' successfully."
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+        
+# 刪除資料
+
+# 查詢資料
+
+# 修改資料
+
 
 # 計算單點半徑範圍內家戶數
 @app.post("/households/point", response_model=HouseholdsResponse)
@@ -160,7 +287,7 @@ async def get_households_within_polygon(request: PolygonRequest):
                 raise HTTPException(status_code=404, detail="No data found within the specified area")
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
-        
+
 
 # 計算多點面積範圍內人口數
 @app.post("/population/area", response_model=PopulationResponse)
@@ -190,7 +317,7 @@ async def get_households_within_polygon(request: PolygonRequest):
                 raise HTTPException(status_code=404, detail="No data found within the specified area")
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
-        
+
 
 # 主程式
 if __name__ == "__main__":
