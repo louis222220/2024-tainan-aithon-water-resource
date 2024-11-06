@@ -7,9 +7,18 @@ from sqlalchemy import text
 from pydantic import BaseModel
 from typing import List
 import os
+from fastapi.middleware.cors import CORSMiddleware
 
 # 設定 FastAPI 應用程式
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # 資料庫連線設定 
 host = os.getenv("DB_HOST", "127.0.0.1")
