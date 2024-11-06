@@ -9,7 +9,7 @@
 import { onMounted, ref, onBeforeUnmount } from 'vue';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import * as coordinateAPI from "../api/coordinate";
+import { sendCoordinate } from '../api/coordinate';
 
 export default {
   name: 'MapView',
@@ -102,16 +102,21 @@ export default {
     const sendPolygon = async () => {
       if (!polygon.value) return;
 
-      const coordinates = markers.value.map(({ marker, address }) => ({
-        latlng: marker.getLatLng(),
-        address: address
-      }));
+      const latlngs = markers.value.map(({ marker }) => marker.getLatLng());
+      const wktPolygon = `POLYGON((${latlngs.map(latlng => `${latlng.lng} ${latlng.lat}`).join(', ')}))`;
+
+      const payload = {
+        overlap_ratio: 0.8, // 假設這是固定值，你可以根據需要進行修改
+        wkt_polygon: wktPolygon
+      };
 
       try {
-        const response = await coordinateAPI.sendCoordinate(coordinates);
+        const response = await sendCoordinate(payload);
+        console.log('Polygon sent successfully:', response);
       } catch (error) {
-        console.error('Error sending polygon:', error);
-        alert('發生錯誤，請聯繫管理員。');
+        console.error('錯誤資訊阿:', error);
+        alert('發送多邊形時發生錯誤，請聯繫管理員。');
+        throw new Error('發送多邊形時發生錯誤，請聯繫管理員。');
       }
     };
 
