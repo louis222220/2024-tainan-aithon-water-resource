@@ -103,6 +103,8 @@ export default {
       if (!polygon.value) return;
 
       const latlngs = markers.value.map(({ marker }) => marker.getLatLng());
+      // 目前的 API 是頭尾的點要連接起來
+      latlngs.push(latlngs[0]);
       const wktPolygon = `POLYGON((${latlngs.map(latlng => `${latlng.lng} ${latlng.lat}`).join(', ')}))`;
 
       const payload = {
