@@ -9,11 +9,21 @@ const apiClient = axios.create({
   },
 });
 
-export const sendCoordinate = async (request) => {
+// 獲取座標
+export const getHouseholds = async (request) => {
   try {
-    const response = await apiClient.post("/households/area", request);
-    console.log('想看一下錯誤', response);
-    
+    const response = await apiClient.post("/households/area", request); 
+    return response.data;
+  } catch (error) {
+    console.error("Error response:", error);
+    throw error;
+  }
+};
+
+// 獲取人口數
+export const getPopulation = async (request) => {
+  try {
+    const response = await apiClient.post("/population/area", request); 
     return response.data;
   } catch (error) {
     console.error("Error response:", error);
