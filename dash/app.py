@@ -1,12 +1,12 @@
 import dash
 import dash_bootstrap_components as dbc
-from dash import Input, Output, State, dcc, html
+from dash import Input, Output, State, dcc, html, dash_table
 import dash_leaflet as dl
 from dash_extensions.javascript import assign
 import pandas as pd
-from dash import dash_table
+import geopandas as gpd
 from shapely.geometry import Polygon
-
+from shapely import wkt
 
 app = dash.Dash(
     external_stylesheets=[dbc.themes.BOOTSTRAP, dbc.icons.BOOTSTRAP],
@@ -27,7 +27,7 @@ app.layout = dbc.Container([
 
             dbc.Col([
                 dbc.Label('請輸入資料集名稱:'),
-                dbc.Input(id="dataset_name", type="text"),
+                dbc.Input(id="dataset-name", type="text"),
             ], md=4),
 
     ], className="mb-3"),
@@ -98,8 +98,15 @@ app.layout = dbc.Container([
 
     ], className="mb-3"),
 
+    # 資料下載按鈕
+    html.Div(id="download-data-component"),
+
     # 暫存資料表
     dcc.Store(id='store-data', data=pd.DataFrame().to_dict('records')),
+    # 下載CSV格式檔案資料
+    dcc.Download(id="download-csv-data"),
+    # 下載GeoJson格式檔案資料
+    dcc.Download(id="download-geojson-data"),
 
 ])
 
@@ -137,6 +144,7 @@ def get_polygon(x):
     Output('dataset-table', 'children'),
     Output('store-data', 'data'),
     Output("edit-control", "editToolbar"),
+    Output("download-data-component", "children"),
     Input("insert-data-button", "n_clicks"),
     State('store-data', 'data'),
     State('data-note', 'value'),
@@ -146,12 +154,15 @@ def get_polygon(x):
     State('data-population', 'value'),
 )
 def insert_data(n_clicks, data, data_note, data_polygon, data_area, data_households, data_population):
+
     # 初始輸出值
     dataset_table = None
     updated_data = pd.DataFrame(data)
+    downloadDataComponent = []
 
-    # 按鈕需被點擊 且需要有效的 polygon 才處理
+    # 按鈕需被點擊 且需要有效的 polygon 資料才會被新增
     if n_clicks and data_polygon:
+
         # 將新增資料封裝為 DataFrame
         new_data = pd.DataFrame([{
             'note': data_note,
@@ -168,16 +179,76 @@ def insert_data(n_clicks, data, data_note, data_polygon, data_area, data_househo
         else:
             updated_data = new_data
 
-        # 更新表格顯示
-        dataset_table = [
-            html.H2(html.Center('目前標記資料')),
-            dash_table.DataTable(
-                data=updated_data.to_dict('records'),
-                columns=[{"name": col, "id": col} for col in updated_data.columns]
-            ),
+        # 產生下載按鈕
+        downloadDataComponent = [
+            dbc.Row([
+
+                dbc.Col([
+                    dbc.Button("下載CSV格式檔案", id="download-csv-button", n_clicks=0, color="primary", style={"margin-top": "30px"}),
+                    dbc.Button("下載GeoJSON格式檔案", id="download-geojson-button", n_clicks=0, color="primary", style={"margin-top": "30px"}),
+                ], style={
+                    "display": "flex",
+                    "gap": "10px",  # 按鈕之間的間距
+                    "margin-top": "30px",
+                },),
+
+            ], className="mb-3")
         ]
 
-    return dataset_table, updated_data.to_dict('records') if updated_data is not None else None, dict(mode="remove", action="clear all", n_clicks=n_clicks)
+    # 更新表格顯示
+    dataset_table = [
+        html.H2(html.Center('目前標記資料')),
+        dash_table.DataTable(
+            data=updated_data.to_dict('records'),
+            columns=[{"name": col, "id": col} for col in updated_data.columns],
+            style_data={
+                'whiteSpace': 'normal',
+                'height': 'auto',
+            },
+            style_cell={
+                'minWidth': 'auto',
+            },
+        ),
+    ]
+
+    return [
+        dataset_table, 
+        updated_data.to_dict('records') if updated_data is not None else None, 
+        dict(mode="remove", action="clear all", n_clicks=n_clicks),  # 清除目前地圖標記
+        downloadDataComponent,
+    ]
+
+
+# 下載CSV格式資料
+@app.callback(
+    Output("download-csv-data", "data"),
+    Input("download-csv-button", "n_clicks"),
+    State('dataset-name', 'value'),
+    State('store-data', 'data'),
+)
+def download_csv(n_clicks, datasetName, data):
+    
+    if n_clicks > 0:
+        df = pd.DataFrame(data).to_csv(encoding='utf-8-sig', index=False)
+        return dcc.send_bytes(df.encode(), f"{datasetName}.csv")
+
+# 下載GeoJSON格式資料
+@app.callback(
+    Output("download-geojson-data", "data"),
+    Input("download-geojson-button", "n_clicks"),
+    State('dataset-name', 'value'),
+    State('store-data', 'data'),
+)
+def download_geojson(n_clicks, datasetName, data):
+
+    if n_clicks > 0:
+        df = pd.DataFrame(data)
+        # 使用 WKT (Well-Known Text) 將 polygon 字串轉換為 Shapely Geometry 物件
+        df['polygon'] = df['polygon'].apply(wkt.loads)
+        # 使用 GeoPandas 將 DataFrame 轉換為 GeoDataFrame
+        df = gpd.GeoDataFrame(df, geometry='polygon')
+        df = df.to_json()
+        return dcc.send_bytes(df.encode(), f"{datasetName}.geojson")
 
 
 # 主程式
