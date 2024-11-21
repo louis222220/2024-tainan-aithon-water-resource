@@ -1,6 +1,6 @@
 import dash
 import dash_bootstrap_components as dbc
-from dash import Input, Output, State, dcc, html, dash_table
+from dash import Input, Output, State, ALL, dcc, html, dash_table
 import dash_leaflet as dl
 from dash_extensions.javascript import assign
 import pandas as pd
@@ -9,6 +9,7 @@ from shapely.geometry import Polygon
 from shapely import wkt
 
 app = dash.Dash(
+    title='地圖範圍標記資訊工具',
     external_stylesheets=[dbc.themes.BOOTSTRAP, dbc.icons.BOOTSTRAP],
     meta_tags=[
         {"name": "viewport", "content": "width=device-width, initial-scale=1"}
@@ -25,11 +26,36 @@ app.layout = dbc.Container([
 
     dbc.Row([
 
-            dbc.Col([
-                dbc.Label('請輸入資料集名稱:'),
-                dbc.Input(id="dataset-name", type="text"),
-            ], md=4),
+        dbc.Col([
 
+            dbc.Label('請輸入資料集名稱:'),
+            dbc.Input(id="dataset-name", type="text"),
+        ], md=4),
+
+    ], className="mb-3"),
+
+    html.Hr(),
+
+    dbc.Row([
+
+        dbc.Col([
+            html.Label(f"自定義資料欄位名稱:"),
+        ], md=4),
+
+        dbc.Col([
+            html.Label(f"資料型別:"),
+        ], md=4),
+    ], className="mb-3"),
+
+    # 自定義欄位名稱設定
+    html.Div(id='custom-name-options'), 
+
+    dbc.Row([
+    
+        dbc.Col([
+
+            dbc.Button("增加自定義資料欄位", id="add-input-btn", color="primary", n_clicks=0),
+        ], md=4),
     ], className="mb-3"),
 
     html.Hr(),
@@ -67,23 +93,41 @@ app.layout = dbc.Container([
         # 標註表格放置位置
         dbc.Col([
 
-            dbc.Label('資料說明:'),
-            dbc.Input(id="data-note", type="text"),
+            html.Div(id='custom-inputs'),
 
-            dbc.Label('經緯度範圍:'),
-            dbc.Input(id="data-polygon", type="text", disabled=True),
+            dbc.Row([
+                dbc.Col([
+                    dbc.Label('經緯度範圍(polygon):'),
+                    dbc.Input(id="data-polygon", type="text", disabled=True, placeholder='請於左側地圖標記範圍'),
+                ]),
+            ], className="mb-3"),
 
-            dbc.Label('面積範圍:'),
-            dbc.Input(id="data-area", type="number", disabled=True),
+            dbc.Row([
+                dbc.Col([
+                    dbc.Label('面積範圍(area):'),
+                    dbc.Input(id="data-area", type="number", disabled=True, placeholder='程式自動依標記範圍計算'),
+                ]),
+            ], className="mb-3"),
 
-            dbc.Label('門牌數:'),
-            dbc.Input(id="data-households", type="number", disabled=True),
+            dbc.Row([
+                dbc.Col([
+                    dbc.Label('門牌數(households):'),
+                    dbc.Input(id="data-households", type="number", disabled=True, placeholder='程式自動依標記範圍計算'),
+                ]),
+            ], className="mb-3"),
 
-            dbc.Label('人口數:'),
-            dbc.Input(id="data-population", type="number", disabled=True),
+            dbc.Row([
+                dbc.Col([
+                    dbc.Label('人口數(population):'),
+                    dbc.Input(id="data-population", type="number", disabled=True, placeholder='程式自動依標記範圍計算'),
+                ]),
+            ], className="mb-3"),
 
-            dbc.Button("新增資料", id="insert-data-button", n_clicks=0, color="primary", style={"margin-top": "30px"}),
-
+            dbc.Row([
+                dbc.Col([
+                    dbc.Button("新增資料", id="insert-data-button", n_clicks=0, color="primary", style={"margin-top": "30px"}),
+                ]),
+            ], className="mb-3"),
         ]),
     ], className="mb-3"),
 
@@ -109,6 +153,68 @@ app.layout = dbc.Container([
     dcc.Download(id="download-geojson-data"),
 
 ])
+
+
+# 依使用者需求產生自定義欄位
+@app.callback(
+    Output("custom-name-options", "children"),
+    Input("add-input-btn", "n_clicks"),
+    State("custom-name-options", "children")
+)
+def add_input_fields(n_clicks, existing_children):
+
+    if existing_children is None:
+        existing_children = []
+
+    new_field = dbc.Row([
+        dbc.Col([
+            dbc.Input(
+                id={'type': 'custom-input', 'index': n_clicks},
+                type='text',
+                placeholder=f"請輸入自定義欄位名稱",
+            ),
+        ], md=4),
+        dbc.Col([
+            dbc.Select(
+                id={'type': 'custom-input-type', 'index': n_clicks},
+                options=[
+                    {'label': '文字', 'value': 'text'},
+                    {'label': '數值', 'value': 'number'}
+                ],
+                value='text',
+            ),
+        ], md=4),
+    ], className="mb-3")
+
+    return existing_children + [new_field]
+
+
+# 依據欄位名稱生成對應的輸入框
+@app.callback(
+    Output('custom-inputs', 'children'),
+    Input({'type': 'custom-input', 'index': ALL}, 'value'),
+    Input({'type': 'custom-input-type', 'index': ALL}, 'value'),
+)
+def generate_inputs(*args):
+
+    field_name = args[0]
+    field_type = args[1]
+    outputs = []
+    for i, (field_name, field_type) in enumerate(zip(field_name, field_type)):
+        if field_name:
+            outputs.extend([
+                dbc.Row([
+                    dbc.Col([
+                        html.Label(f"{field_name}:"),
+                        dbc.Input(
+                            id={'type': 'field-input', 'index': i+1}, 
+                            type=field_type, 
+                            placeholder=f"請輸入{'文字' if field_type == 'text' else '數值'}")
+                    ]),
+                ], className="mb-3"),  
+            ])
+
+    return outputs
 
 
 # 處理使用者地圖標記多邊形
@@ -147,13 +253,12 @@ def get_polygon(x):
     Output("download-data-component", "children"),
     Input("insert-data-button", "n_clicks"),
     State('store-data', 'data'),
-    State('data-note', 'value'),
     State('data-polygon', 'value'),
     State('data-area', 'value'),
     State('data-households', 'value'),
     State('data-population', 'value'),
 )
-def insert_data(n_clicks, data, data_note, data_polygon, data_area, data_households, data_population):
+def insert_data(n_clicks, data, data_polygon, data_area, data_households, data_population):
 
     # 初始輸出值
     dataset_table = None
@@ -165,7 +270,6 @@ def insert_data(n_clicks, data, data_note, data_polygon, data_area, data_househo
 
         # 將新增資料封裝為 DataFrame
         new_data = pd.DataFrame([{
-            'note': data_note,
             'polygon': data_polygon,
             'area': data_area,
             'households': data_households,
@@ -196,20 +300,21 @@ def insert_data(n_clicks, data, data_note, data_polygon, data_area, data_househo
         ]
 
     # 更新表格顯示
-    dataset_table = [
-        html.H2(html.Center('目前標記資料')),
-        dash_table.DataTable(
-            data=updated_data.to_dict('records'),
-            columns=[{"name": col, "id": col} for col in updated_data.columns],
-            style_data={
-                'whiteSpace': 'normal',
-                'height': 'auto',
-            },
-            style_cell={
-                'minWidth': 'auto',
-            },
-        ),
-    ]
+    if len(updated_data) > 0:
+        dataset_table = [
+            html.H2(html.Center('目前標記資料')),
+            dash_table.DataTable(
+                data=updated_data.to_dict('records'),
+                columns=[{"name": col, "id": col} for col in updated_data.columns],
+                style_data={
+                    'whiteSpace': 'normal',
+                    'height': 'auto',
+                },
+                style_cell={
+                    'minWidth': 'auto',
+                },
+            ),
+        ]
 
     return [
         dataset_table, 
@@ -231,6 +336,7 @@ def download_csv(n_clicks, datasetName, data):
     if n_clicks > 0:
         df = pd.DataFrame(data).to_csv(encoding='utf-8-sig', index=False)
         return dcc.send_bytes(df.encode(), f"{datasetName}.csv")
+
 
 # 下載GeoJSON格式資料
 @app.callback(
