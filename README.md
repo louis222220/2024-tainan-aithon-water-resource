@@ -37,7 +37,7 @@ docker-compose up -d
     * port: 5432
 * 資料表:
     * households: 112年臺南市門牌坐標資料，資料來源: [台南市政府資料開放平台](https://data.tainan.gov.tw/dataset/108-address-location)
-    * population: 112年12月臺南市統計區人口統計_最小統計區_WGS84
+    * population: 112年12月臺南市統計區人口統計_最小統計區_WGS84，資料來源: [內政部社會經濟資料服務平台](https://segis.moi.gov.tw/STATCloud/QueryInterfaceView?COL=%252f%252f4qvzChTyZdi2iuwCoAOA%253d%253d&MCOL=ODxgDwr%252fCgWo%252fl0OH5x%252bEQ%253d%253d)
 
 ## FastAPI
 * 程式碼請參考[/api/app.py](/api/app.py)
