@@ -63,3 +63,22 @@ SELECT sum(population.p_cnt) as population
 FROM population
 JOIN input_polygon ON ST_Intersects(ST_Transform(population.geometry, 3857), ST_Transform(input_polygon.geom, 3857))
 WHERE (ST_Area(ST_Intersection(ST_Transform(population.geometry, 3857), ST_Transform(input_polygon.geom, 3857))) / ST_Area(ST_Transform(population.geometry, 3857))) >= 0.8;
+
+/*查詢指定點半徑範圍內的面積*/
+SELECT ST_Area(
+    ST_Buffer(
+        ST_SetSRID(ST_MakePoint(120.1854, 22.9921), 4326)::geography, 
+        200
+    )
+) AS area;
+
+/*查詢指定多邊形範圍內的面積*/
+SELECT ST_Area(
+    ST_Transform(
+        ST_GeomFromText(
+            'POLYGON((120.1828 22.9961, 120.1811 22.9869, 120.1906 22.9926, 120.1828 22.9961))', 
+            4326
+        ), 
+        32651
+    )
+) AS area;

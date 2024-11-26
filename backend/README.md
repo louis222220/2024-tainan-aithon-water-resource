@@ -27,7 +27,7 @@ docker-compose up -d
     * password: admin
     * port: 5432
 * 資料表:
-    * households: 112年臺南市門牌坐標資料
+    * households: 112年臺南市門牌坐標資料，資料來源: [台南市政府資料開放平台](https://data.tainan.gov.tw/dataset/108-address-location)
     * population: 112年12月臺南市統計區人口統計_最小統計區_WGS84
 
 ## FastAPI
@@ -38,21 +38,12 @@ docker-compose up -d
     * /population/point: 計算指定點半徑範圍內的人口數
         * 輸入: 指定點經緯度、半徑(公尺)、與最小區域重疊範圍比率
         * 輸出: 人口數
-    * /households/area: 計算指定多邊形範圍內的家戶數
+    * /households/polygon: 計算指定多邊形範圍內的家戶數
         * 輸入: 多邊形經緯度
         * 輸出: 家戶數
-    * /population/area: 計算指定多邊形範圍內的人口數
+    * /population/polygon: 計算指定多邊形範圍內的人口數
         * 輸入: 多邊形經緯度、與最小區域重疊範圍比率
         * 輸出: 人口數
-    * /tables/create: 建立標註資料表
-        * 輸入: 資料表名、欄位型別
-        * 輸出: 無
-    * /tables/delete: 刪除標註資料表
-        * 輸入: 資料表名
-        * 輸出: 無
-    * /tables/{table_name}/insert: 新增資料至資料表
-        * 輸入: 資料表名、欄位數值
-        * 輸出: 無
     * 備註:
         * 多邊形經緯度格式範例: POLYGON((120.1828 22.9961, 120.1811 22.9869, 120.1906 22.9926, 120.1828 22.9961))
         * 與最小區域重疊範圍比率: 介於0至1之間
