@@ -2,6 +2,22 @@ version: '3.8'
 
 services:
 
+  # WEB(Python Dash)
+  web:
+    build:
+      context: .
+      dockerfile: ./docker/web/Dockerfile
+    restart: always
+    ports:
+      - "8888:8888"
+    depends_on:
+      - db
+      - api
+    environment:
+      - API_HOST=api
+    volumes:
+      - ./web:/code
+
   # FastAPI
   api:
     build:
@@ -15,7 +31,7 @@ services:
     environment:
       - DB_HOST=db
     volumes:
-      - ./app:/app
+      - ./api:/code
 
   # PostGIS資料庫資料初始化(匯入人口與門牌資料)
   initdb:

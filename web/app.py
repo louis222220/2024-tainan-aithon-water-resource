@@ -23,7 +23,7 @@ app = dash.Dash(
     ],
     suppress_callback_exceptions=True,
 )
-
+server = app.server
 
 app.layout = dbc.Container([
 
@@ -46,7 +46,7 @@ app.layout = dbc.Container([
     dbc.Row([
 
         dbc.Col([
-            html.Label(f"自定義資料欄位名稱:"),
+            html.Label(f"欄位名稱:"),
         ], md=4),
 
         dbc.Col([
@@ -61,7 +61,7 @@ app.layout = dbc.Container([
     
         dbc.Col([
 
-            dbc.Button("增加自定義資料欄位", id="add-input-btn", color="primary", n_clicks=0),
+            dbc.Button("加入新欄位", id="add-input-btn", color="primary", n_clicks=0),
         ], md=4),
     ], className="mb-3"),
 
@@ -100,8 +100,6 @@ app.layout = dbc.Container([
         # 標註表格放置位置
         dbc.Col([
 
-            html.Div(id='custom-inputs'),
-
             dbc.Row([
                 dbc.Col([
                     dbc.Label('經緯度範圍(polygon):'),
@@ -129,6 +127,8 @@ app.layout = dbc.Container([
                     dbc.Input(id="data-population", type="number", disabled=True, placeholder='程式自動依標記範圍計算'),
                 ]),
             ], className="mb-3"),
+
+            html.Div(id='custom-inputs'),
 
             dbc.Row([
                 dbc.Col([
@@ -185,7 +185,7 @@ def add_input_fields(n_clicks, existing_children):
             dbc.Input(
                 id={'type': 'custom-input', 'index': n_clicks},
                 type='text',
-                placeholder=f"請輸入自定義欄位名稱",
+                placeholder=f"請輸入新欄位名稱",
             ),
         ], md=4),
         dbc.Col([
@@ -278,7 +278,7 @@ def get_polygon(x):
         # 取得使用者選取範圍內的人口數
         url = f'http://{api_server}:{api_port}/population/polygon'
         data = {
-            'overlap_ratio': 0.8,
+            'overlap_ratio': 0.5,
             'wkt_polygon': wkt
         }
         response = requests.post(url, json=data)
