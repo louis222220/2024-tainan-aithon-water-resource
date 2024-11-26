@@ -98,7 +98,7 @@ app.layout = dbc.Container([
             dbc.Row([
                 dbc.Col([
                     dbc.Label('經緯度範圍(polygon):'),
-                    dbc.Input(id="data-polygon", type="text", disabled=True, placeholder='請於左側地圖標記範圍'),
+                    dbc.Input(id="data-polygon", type="text", disabled=True, placeholder='請於左側地圖標記範圍(必填)'),
                 ]),
             ], className="mb-3"),
 
@@ -128,6 +128,13 @@ app.layout = dbc.Container([
                     dbc.Button("新增資料", id="insert-data-button", n_clicks=0, color="primary", style={"margin-top": "30px"}),
                 ]),
             ], className="mb-3"),
+
+            dbc.Row([
+                dbc.Col([
+                    html.Div(id="error-message"),
+                ]),
+
+            ], className="mb-3"),
         ]),
     ], className="mb-3"),
 
@@ -137,7 +144,7 @@ app.layout = dbc.Container([
 
         # 呈現當前標註結果
         dbc.Col([
-            html.Div(id="dataset-table"),
+            html.Div(id="dataset-table-div"),
         ]),
 
     ], className="mb-3"),
@@ -195,21 +202,23 @@ def add_input_fields(n_clicks, existing_children):
     Input({'type': 'custom-input', 'index': ALL}, 'value'),
     Input({'type': 'custom-input-type', 'index': ALL}, 'value'),
 )
-def generate_inputs(*args):
+def generate_inputs(field_name, field_type):
 
-    field_name = args[0]
-    field_type = args[1]
     outputs = []
     for i, (field_name, field_type) in enumerate(zip(field_name, field_type)):
         if field_name:
             outputs.extend([
                 dbc.Row([
                     dbc.Col([
-                        html.Label(f"{field_name}:"),
+                        html.Label(
+                            id={'type': 'field-label', 'index': i+1}, 
+                            children=f"{field_name}:"
+                            ),
                         dbc.Input(
                             id={'type': 'field-input', 'index': i+1}, 
                             type=field_type, 
-                            placeholder=f"請輸入{'文字' if field_type == 'text' else '數值'}")
+                            placeholder=f"請輸入{'文字' if field_type == 'text' else '數值'}"
+                            )
                     ]),
                 ], className="mb-3"),  
             ])
@@ -247,29 +256,38 @@ def get_polygon(x):
 
 # 使用者新增資料
 @app.callback(
-    Output('dataset-table', 'children'),
+    Output('error-message', 'children'),
+    Output('dataset-table-div', 'children'),
     Output('store-data', 'data'),
     Output("edit-control", "editToolbar"),
     Output("download-data-component", "children"),
+    Output({'type': 'field-input', 'index': ALL}, 'value'),
     Input("insert-data-button", "n_clicks"),
     State('store-data', 'data'),
+    State({'type': 'field-label', 'index': ALL}, 'children'),
+    State({'type': 'field-input', 'index': ALL}, 'value'),
     State('data-polygon', 'value'),
     State('data-area', 'value'),
     State('data-households', 'value'),
     State('data-population', 'value'),
 )
-def insert_data(n_clicks, data, data_polygon, data_area, data_households, data_population):
+def insert_data(n_clicks, data, field_label, field_value, data_polygon, data_area, data_households, data_population):
 
     # 初始輸出值
     dataset_table = None
     updated_data = pd.DataFrame(data)
     downloadDataComponent = []
+    errorMessage = []
 
     # 按鈕需被點擊 且需要有效的 polygon 資料才會被新增
     if n_clicks and data_polygon:
 
+        # 使用者自定義資料
+        customData = {label[:-1]: value for label, value in zip(field_label, field_value)}
+
         # 將新增資料封裝為 DataFrame
         new_data = pd.DataFrame([{
+            **customData,
             'polygon': data_polygon,
             'area': data_area,
             'households': data_households,
@@ -299,28 +317,35 @@ def insert_data(n_clicks, data, data_polygon, data_area, data_households, data_p
             ], className="mb-3")
         ]
 
+    # 提示訊息
+    if n_clicks and not data_polygon:
+        errorMessage = errorMessage + [html.Span('提示訊息: 請記得在地圖上框選範圍唷!', style={'color': 'red'})]
+        
     # 更新表格顯示
     if len(updated_data) > 0:
+
         dataset_table = [
             html.H2(html.Center('目前標記資料')),
             dash_table.DataTable(
+                id='dataset-table',
                 data=updated_data.to_dict('records'),
-                columns=[{"name": col, "id": col} for col in updated_data.columns],
-                style_data={
-                    'whiteSpace': 'normal',
-                    'height': 'auto',
-                },
+                columns=[{"name": col, "id": col}  for col in updated_data.columns],
                 style_cell={
-                    'minWidth': 'auto',
+                    'maxWidth': '100px', 'textOverflow': 'ellipsis'
                 },
+                editable=True,  # 允許編輯內容
+                row_deletable=True,  # 允許刪除列
+                markdown_options={"html": True},
             ),
         ]
 
     return [
+        errorMessage,
         dataset_table, 
         updated_data.to_dict('records') if updated_data is not None else None, 
         dict(mode="remove", action="clear all", n_clicks=n_clicks),  # 清除目前地圖標記
         downloadDataComponent,
+        [""] * len(field_value),
     ]
 
 
