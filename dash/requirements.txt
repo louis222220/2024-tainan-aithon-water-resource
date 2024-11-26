@@ -5,3 +5,4 @@ dash_extensions
 pandas
 shapely
 geopandas
+requests

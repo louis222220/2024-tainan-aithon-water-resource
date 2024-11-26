@@ -7,6 +7,13 @@ import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Polygon
 from shapely import wkt
+import requests
+import os
+
+# API主機位置
+api_server = os.getenv("API_HOST", "127.0.0.1")
+api_port = 8000
+
 
 app = dash.Dash(
     title='地圖範圍標記資訊工具',
@@ -98,13 +105,13 @@ app.layout = dbc.Container([
             dbc.Row([
                 dbc.Col([
                     dbc.Label('經緯度範圍(polygon):'),
-                    dbc.Input(id="data-polygon", type="text", disabled=True, placeholder='請於左側地圖標記範圍(必填)'),
+                    dbc.Input(id="data-polygon", type="text", disabled=True, placeholder='請於左側地圖標記範圍(必填 | 只能接受1個範圍)'),
                 ]),
             ], className="mb-3"),
 
             dbc.Row([
                 dbc.Col([
-                    dbc.Label('面積範圍(area):'),
+                    dbc.Label('面積範圍(平方公尺)(area):'),
                     dbc.Input(id="data-area", type="number", disabled=True, placeholder='程式自動依標記範圍計算'),
                 ]),
             ], className="mb-3"),
@@ -230,6 +237,9 @@ def generate_inputs(field_name, field_type):
 @app.callback(
         Output("geojson", "data"), 
         Output("data-polygon", "value"),
+        Output('data-households', 'value'),
+        Output('data-population', 'value'),
+        Output('data-area', 'value'),
         Input("edit-control", "geojson")
 )
 def get_polygon(x):
@@ -251,7 +261,40 @@ def get_polygon(x):
     else:
         wkt = None
 
-    return x, wkt
+    households = None
+    population = None
+    area = None
+    if wkt:
+
+        # 取得使用者選取範圍內的家戶數
+        url = f'http://{api_server}:{api_port}/households/polygon'
+        data = {
+            'wkt_polygon': wkt
+        }
+        response = requests.post(url, json=data)
+        if response.status_code == 200:
+            households = response.json()['households']
+
+        # 取得使用者選取範圍內的人口數
+        url = f'http://{api_server}:{api_port}/population/polygon'
+        data = {
+            'overlap_ratio': 0.8,
+            'wkt_polygon': wkt
+        }
+        response = requests.post(url, json=data)
+        if response.status_code == 200:
+            population = response.json()['population']
+
+        # 取得使用者選取範圍的面積
+        url = f'http://{api_server}:{api_port}/area/polygon'
+        data = {
+            'wkt_polygon': wkt
+        }
+        response = requests.post(url, json=data)
+        if response.status_code == 200:
+            area = round(response.json()['area'], 2)
+
+    return x, wkt, households, population, area
 
 
 # 使用者新增資料
